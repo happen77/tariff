@@ -68,14 +68,15 @@ SITE_URL = (os.getenv("SITE_URL", "").strip().rstrip("/") or DEFAULT_SITE.rstrip
 TEST_MODE = "--test" in sys.argv
 
 # 站名 -> (history 路径, 显示名, 图标)
-# 联通/电信/广电抓取已永久停用，仅推送移动。
 SITES = [
     ("data/history.json", "移动", "🔵", "mobile"),
+    ("unicom/data/history.json", "联通", "🔴", "unicom"),
+    ("telecom/data/history.json", "电信", "🟠", "telecom"),
 ]
 
 # ── 推送过滤（可选；默认仅移动）──
-# PUSH_OPS   只推哪些运营商，逗号分隔：mobile / unicom / telecom / gb
-#            例：mobile,unicom   留空 = 默认仅移动（三家已停用）
+# PUSH_OPS   只推哪些运营商，逗号分隔：mobile / unicom / telecom
+#            例：mobile,unicom   留空 = 默认移动
 # PUSH_PROVS 只统计哪些省份（拼音，逗号分隔），并且推送里列出分省明细
 #            例：quanguo,hunan,guangdong   留空 = 不列明细、省份全算
 # 这两个变量由「自定义推送」弹窗选择后写入仓库 Variables 生效；不设就不变。
@@ -335,6 +336,9 @@ def send_notify(title, text):
 
 
 def main():
+    selected_ops = PUSH_OPS or ["mobile"]
+    operator_names = "、".join(name for _, name, _, op in SITES if op in selected_ops)
+    region_names = "、".join(map(sec_cn, PUSH_PROVS)) if PUSH_PROVS else "全部地区"
     # 测试模式：验证 webhook/加签是否配对正确，不读数据
     if TEST_MODE:
         # 多通道时可能只配了飞书/企微/邮件而没配钉钉，交给 notify 统一判断
@@ -352,10 +356,11 @@ def main():
             "## ✅ 配置成功\n\n"
             "你的通知通道已成功接入「运营商资费监控」。\n\n"
             "**当前配置**\n\n"
-            "- 关注省份：`%s`\n"
+            "- 推送地区：%s\n"
+            "- 运营商：%s\n"
             "- 站点链接：%s\n\n"
             "下次资费变化将自动推送到这里。"
-            % (FOCUS_SEC, SITE_URL or "未配置"))
+            % (region_names, operator_names, SITE_URL or "未配置"))
         okc = [n for n, ok, _ in (res or []) if ok]
         print("测试完成：成功 %d / 已配置 %d%s"
               % (len(okc), len(res or []),
@@ -388,8 +393,7 @@ def main():
     # 过滤条件写进正文，避免「数字变小了」被误判成漏推
     _scope = []
     if PUSH_OPS:
-        _scope.append("运营商：" + "、".join(
-            n for _, n, _, o in SITES if o in PUSH_OPS))
+        _scope.append("运营商：" + operator_names)
     if PUSH_PROVS:
         _scope.append("省份：" + "、".join(sec_cn(x) for x in PUSH_PROVS))
     if _scope:
@@ -399,7 +403,7 @@ def main():
     grand = [0, 0, 0]
 
     for path, name, icon, op in SITES:
-        if PUSH_OPS and op not in PUSH_OPS:
+        if op not in selected_ops:
             continue          # 运营商没勾选，整个跳过，连「无变化」都不提
         hist = load_history(path)
         a, r, m, secs, batches, latest_ts = summarize(hist, since, PUSH_PROVS or None, until=until)
@@ -438,7 +442,7 @@ def main():
     lines.append("**合计**：新增 %d、下架 %d、修改 %d" % tuple(grand))
     if not any_change:
         lines.append("")
-        lines.append("> 本时段内移动运营商无资费变化。")
+        lines.append("> 统计窗口内没有匹配的资费变更记录。")
 
     # 结尾固定附链接（主站直达），不再依赖外部配置是否填对
     lines.append("")

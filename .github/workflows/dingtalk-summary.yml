@@ -1,6 +1,6 @@
 name: Tariff Notify
 # 汇总推送：钉钉 / 飞书 / 企业微信 / 邮件（配哪个推哪个）
-# 仅推送移动资费（联通/电信/广电抓取已永久停用）
+# 默认推送黑龙江移动、联通、电信资费。
 #
 # ══ 重点省份与推送模式统一在本文件配置（不再散落到各抓取 workflow）══
 #
@@ -331,18 +331,8 @@ jobs:
           DINGTALK_ONLY:    "1"
           REPORT_YESTERDAY: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
           SINCE_HOURS:      ${{ github.event.inputs.hours || '24' }}
-          # 推送过滤（可选）：联通/电信/广电已停用，默认只推移动（mobile）
-          # PUSH_OPS   只推哪些运营商：mobile,unicom,telecom,gb（例：mobile,unicom）
-          # PUSH_PROVS 只统计哪些省份（拼音）：例 quanguo,hunan,guangdong
-          #            设置后推送里会列出分省明细；不设置则不列明细
-          # 两个变量在 Settings → Secrets and variables → Actions → Variables 里填
-          PUSH_OPS:         ${{ vars.PUSH_OPS || 'mobile' }}
+          PUSH_OPS:         ${{ vars.PUSH_OPS || 'mobile,unicom,telecom' }}
           PUSH_PROVS:       ${{ vars.PUSH_PROVS || 'heilongjiang' }}
-          # 仓库未配置 vars 时这里会是空串，必须给默认值
-          # （脚本里也做了显式回退，双保险）
-          # 注意：FOCUS_SEC 已不再用于「筛选推送哪些省」——推送一律列全部
-          # 有变化的省，与网站变化历史同源同口径。此变量仅为兼容旧配置保留。
-          FOCUS_SEC:        ${{ vars.FOCUS_SEC || '' }}
           SITE_URL:         ${{ vars.SITE_URL || 'https://happen77.github.io/tariff/' }}
           SITE_ROOT:        "."
           NOTIFY_ACTION:    ${{ inputs.action }}
