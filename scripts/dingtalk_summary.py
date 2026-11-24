@@ -360,6 +360,8 @@ def main():
         print("测试完成：成功 %d / 已配置 %d%s"
               % (len(okc), len(res or []),
                  ("（%s）" % "、".join(okc)) if okc else ""))
+        if os.getenv("DINGTALK_ONLY") == "1" and not okc:
+            raise SystemExit(1)
         return
 
     now = datetime.now(CST)

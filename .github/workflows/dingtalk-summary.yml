@@ -35,6 +35,7 @@ on:
         options:
           - "手动推送(重点省)"
           - "仅推送"
+          - "测试钉钉连接"
           - "全量推送"
         default: "手动推送(重点省)"
       focus_provs:
@@ -48,31 +49,12 @@ on:
 permissions:
   contents: write    # 抓取后需要提交数据
 
-# 去重：同一时刻只允许一个 Tariff Notify 运行。
-# 之前手动触发时脚本把 204 误判为失败并重试 10 次，导致连发 10 条钉钉。
-# concurrency 让新任务排队等旧的跑完，而不是并发跑多个
-#（并发会让多个 notify 同时读到同一份 history，推送内容重复）。
+# Only runs that fetch and commit data share the mobile build group.
 concurrency:
-  # 必须与 mobile-build.yml 使用同一个 group。
-  # 两个 workflow 都会跑 build_site.py 写 history.json / data/hist 分片，
-  # 之前 group 不同（mobile-build / tariff-notify）导致并发执行：
-  # 两进程各自取不同的 now，互相 git reset+push 覆盖，
-  # 最终 history.json 里的 ts 与分片文件名对不上，前端按 ts 取分片 404，
-  # 表现为「有变动记录但点开没有修改前/后详情」。
-  group: tariff-build
-  # 与 mobile-build.yml 同理：卡死的旧运行必须能被新运行踢掉，
-  # 否则 group 排死会让两边都停摆（线上数据停更的根因之一）。
-  cancel-in-progress: true
+  group: ${{ (github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_dispatch' && (inputs.action == '手动推送(重点省)' || inputs.action == '全量推送'))) && 'tariff-build' || 'tariff-notify' }}
+  cancel-in-progress: false
 
 jobs:
-
-  # ══════════ 推送时间窗守卫 ══════════
-  # GitHub schedule 实测延迟 5~9 小时，cron 写几点都拦不住平台排队。
-  # 与其让它在下午三点乱发一条，不如：不在目标窗口内就直接不推。
-  #   早场 北京 07:30–09:30
-  #   晚场 北京 19:30–21:30
-  # 外部触发器（cron-job.org）在 08:00 / 20:00 通过 repository_dispatch
-  # 打进来，必定落在窗口内；手动触发不受窗口限制。
   window:
     runs-on: ubuntu-latest
     outputs:
@@ -137,74 +119,14 @@ jobs:
                 % (bj.strftime("%m-%d %H:%M"), ev, slot or "无", today, dup, reason))
           PYEOF
 
-  fresh:
-    needs: window
-    if: github.event_name == 'schedule' || github.event_name == 'repository_dispatch'
-    runs-on: ubuntu-latest
-    outputs:
-      stale:  ${{ steps.chk.outputs.stale }}
-      age:    ${{ steps.chk.outputs.age }}
-      newest: ${{ steps.chk.outputs.newest }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-      - id: chk
-        run: |
-          python3 - <<'PYEOF'
-          import json, os, datetime
-          # 只监控移动数据：联通/电信/广电抓取已永久停用（见 README）
-          pats = ["data/latest.json"]
-          keys = ["updated", "updated_at", "generated_at", "time", "date"]
-          now = datetime.datetime.utcnow()
-          best, src = None, ""
-          for p in pats:
-              if not os.path.exists(p):
-                  continue
-              try:
-                  j = json.load(open(p, encoding="utf-8"))
-              except Exception:
-                  continue
-              s = ""
-              for k in keys:
-                  if isinstance(j, dict) and j.get(k):
-                      s = str(j[k]); break
-              if not s:
-                  continue
-              try:
-                  t = datetime.datetime.strptime(s[:19], "%Y-%m-%d %H:%M:%S")
-              except Exception:
-                  continue
-              if best is None or t > best:
-                  best, src = t, p
-          out = os.environ["GITHUB_OUTPUT"]
-          if best is None:
-              print("[fresh] 未找到任何时间戳，判定陈旧")
-              with open(out, "a") as f:
-                  f.write("stale=true\nage=999\nnewest=none\n")
-          else:
-              age = (now - best).total_seconds() / 3600.0
-              stale = "true" if age >= 6 else "false"
-              print("[fresh] 最新数据 %s (%s)，距今 %.1f 小时 -> stale=%s"
-                    % (best, src, age, stale))
-              with open(out, "a") as f:
-                  f.write("stale=%s\nage=%.1f\nnewest=%s\n" % (stale, age, best))
-          PYEOF
-
-  # ══════════ 抓取（手动 / 定时且数据陈旧时）══════════
   fetch:
-    needs: [window, fresh]
-    # 手动触发且选了「手动推送(重点省)」/「全量推送」→ 抓取；
-    # 定时触发 → 当日抓取本由 mobile-build 每 2 小时完成，
-    #   但若它被 GitHub 延迟、数据仍陈旧（fresh.stale=true），本轮自己
-    #   抓一遍再推，避免推成「昨天的变化」。
+    needs: window
     if: >-
       always() && needs.window.outputs.ok == 'true' && (
         (github.event_name == 'workflow_dispatch' && (
           contains(github.event.inputs.action, '重点省') ||
           contains(github.event.inputs.action, '全量')
         )) ||
-        (github.event_name == 'schedule' && needs.fresh.outputs.stale == 'true') ||
         github.event_name == 'repository_dispatch'
       )
     runs-on: ubuntu-latest
@@ -402,7 +324,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 推送汇总（多通道）
+      - name: 推送钉钉日报
         env:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
           DINGTALK_SECRET:  ${{ secrets.DINGTALK_SECRET }}
@@ -423,7 +345,13 @@ jobs:
           FOCUS_SEC:        ${{ vars.FOCUS_SEC || '' }}
           SITE_URL:         ${{ vars.SITE_URL || 'https://happen77.github.io/tariff/' }}
           SITE_ROOT:        "."
-        run: python3 scripts/dingtalk_summary.py
+          NOTIFY_ACTION:    ${{ inputs.action }}
+        run: |
+          if [ "$NOTIFY_ACTION" = "测试钉钉连接" ]; then
+            python3 scripts/dingtalk_summary.py --test
+          else
+            python3 scripts/dingtalk_summary.py
+          fi
 
       - name: 记录本场次已推送（防同场次重复推）
         if: success() && github.event_name != 'workflow_dispatch' && needs.window.outputs.ok == 'true'
