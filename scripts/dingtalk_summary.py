@@ -188,7 +188,7 @@ def human_ago(dt, now):
     return "%d 天前" % int(secs // 86400)
 
 
-def summarize(hist, since, provs=None):
+def summarize(hist, since, provs=None, until=None):
     """汇总某站「最新一轮」的变化。
 
     注意：这里刻意不累加窗口内所有轮次。之前累加导致 24h 内每轮推送
@@ -201,14 +201,17 @@ def summarize(hist, since, provs=None):
     secs = []
     batches = []
     latest = None
-    latest_dt = None
-    for e in hist:
-        dt = parse_ts(e.get("ts"))
-        if dt and dt < since:
-            continue
-        latest = e
-        latest_dt = dt
-    hist = [latest] if latest is not None else []
+    if until is not None:
+        hist = [entry for entry in hist
+                if (dt := parse_ts(entry.get("ts"))) and since <= dt < until]
+        latest = max(hist, key=lambda entry: parse_ts(entry["ts"]), default=None)
+    else:
+        for entry in hist:
+            timestamp = parse_ts(entry.get("ts"))
+            if timestamp and timestamp < since:
+                continue
+            latest = entry
+        hist = [latest] if latest is not None else []
     for e in hist:
         dt = parse_ts(e.get("ts"))
         if dt and dt < since:
@@ -307,18 +310,20 @@ def send_ding(title, text):
         with urllib.request.urlopen(req, timeout=30) as r:
             res = json.load(r)
     except urllib.error.HTTPError as e:
-        print("❌ 钉钉返回 HTTP %s：%s" % (e.code, e.read().decode("utf-8", "ignore")[:200]))
+        print("DingTalk HTTP status: %s" % e.code)
         return False
     except Exception as e:
-        print("❌ 请求失败：%s" % e)
+        print("DingTalk request failed: %s" % type(e).__name__)
         return False
     ok = res.get("errcode") == 0
-    print("钉钉返回: errcode=%s errmsg=%s" % (res.get("errcode"), res.get("errmsg")))
+    print("DingTalk errcode: %s" % res.get("errcode"))
     return ok
 
 
 def send_notify(title, text):
     """优先用多通道模块（钉钉/飞书/企业微信/邮件）；不可用时退回纯钉钉。"""
+    if os.getenv("DINGTALK_ONLY") == "1":
+        return [("DingTalk", send_ding(title, text), "")]
     try:
         import notify
         print("使用多通道推送模块 notify.py")
@@ -358,7 +363,9 @@ def main():
         return
 
     now = datetime.now(CST)
-    since = now - timedelta(hours=SINCE_HOURS)
+    yesterday = os.getenv("REPORT_YESTERDAY") == "1"
+    until = now.replace(hour=0, minute=0, second=0, microsecond=0) if yesterday else None
+    since = until - timedelta(days=1) if yesterday else now - timedelta(hours=SINCE_HOURS)
     # 已推送标记：定时任务每两小时跑一次，而 history 只在真有变化时新增记录。
     # 不记录“这条已推过”，同一轮变化会被后续每个时段重复播报（用户曾收到
     # 昨晚同一条内容两次），只能等下一条新记录出现才能停下来。
@@ -375,7 +382,7 @@ def main():
 
     lines = ["## 资费变化汇总", "",
              "**统计范围**：%s ~ %s (北京时间)" %
-             (since.strftime("%m-%d %H:%M"), now.strftime("%m-%d %H:%M")), ""]
+             (since.strftime("%m-%d %H:%M"), (until or now).strftime("%m-%d %H:%M")), ""]
     # 过滤条件写进正文，避免「数字变小了」被误判成漏推
     _scope = []
     if PUSH_OPS:
@@ -393,7 +400,7 @@ def main():
         if PUSH_OPS and op not in PUSH_OPS:
             continue          # 运营商没勾选，整个跳过，连「无变化」都不提
         hist = load_history(path)
-        a, r, m, secs, batches, latest_ts = summarize(hist, since, PUSH_PROVS or None)
+        a, r, m, secs, batches, latest_ts = summarize(hist, since, PUSH_PROVS or None, until=until)
         grand[0] += a; grand[1] += r; grand[2] += m
         if a or r or m:
             pushed_marks[op] = str(latest_ts or "")
@@ -437,7 +444,7 @@ def main():
     lines.append("🔗 [移动资费站](%s/)" % SITE_URL)
 
     text = "\n".join(lines)
-    print(text)
+    print("变更统计：新增 %d、下架 %d、修改 %d" % tuple(grand))
 
     # 本轮无变化时：定时触发直接跳过推送，不再把上一轮的旧变化当新消息重发。
     # （曾导致每天两次都收到昨晚同一条内容，误以为推送延迟了 12 小时。）
@@ -463,6 +470,8 @@ def main():
     res = send_notify(title, text)
     # 至少有一个通道推送成功才记指纹：全部失败时不记，下个时段还能重试
     ok_any = (not res) or any(ok for _n, ok, _d in res)
+    if os.getenv("DINGTALK_ONLY") == "1" and not ok_any:
+        raise SystemExit(1)
     if any_change and ok_any:
         marks["__summary_mark"] = mark
         marks["__summary_mark_at"] = now.strftime("%Y-%m-%d %H:%M:%S")
