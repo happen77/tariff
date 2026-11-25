@@ -121,16 +121,34 @@ def parse_ts(ts):
     return None
 
 
-def load_history(path):
+def load_history(path, *, strict=False):
     fp = os.path.join(SITE_ROOT, path)
-    if not os.path.exists(fp):
-        return []
     try:
         with open(fp, encoding="utf-8") as f:
             d = json.load(f)
-        return d if isinstance(d, list) else []
-    except Exception:
+        if not isinstance(d, list):
+            raise ValueError("invalid history format")
+        return d
+    except (OSError, ValueError):
+        if strict:
+            raise
         return []
+
+
+def pending_regions(history_path, regions, cutoff):
+    """Return provinces without a snapshot at or after the reporting cutoff."""
+    pending = []
+    for region in regions:
+        path = os.path.join(SITE_ROOT, os.path.dirname(history_path), region + ".json")
+        try:
+            with open(path, encoding="utf-8") as f:
+                snapshot = json.load(f)
+            checked = parse_ts(snapshot.get("timestamp") or snapshot.get("updated"))
+        except (OSError, ValueError, AttributeError):
+            checked = None
+        if checked is None or checked < cutoff:
+            pending.append(region)
+    return pending
 
 
 def load_latest_time(path):
@@ -404,11 +422,21 @@ def main():
         lines.append("")
     any_change = False
     grand = [0, 0, 0]
+    incomplete = []
 
     for path, name, icon, op in SITES:
         if op not in selected_ops:
             continue          # 运营商没勾选，整个跳过，连「无变化」都不提
-        hist = load_history(path)
+        if yesterday and PUSH_PROVS:
+            pending = pending_regions(path, PUSH_PROVS, until)
+            if pending:
+                incomplete.append(f"{name}（{'、'.join(map(sec_cn, pending))}数据待更新）")
+                continue
+        try:
+            hist = load_history(path, strict=True) if yesterday else load_history(path)
+        except (OSError, ValueError):
+            incomplete.append(f"{name}（历史数据无法读取）")
+            continue
         a, r, m, secs, batches, latest_ts = summarize(hist, since, PUSH_PROVS or None, until=until)
         grand[0] += a; grand[1] += r; grand[2] += m
         if a or r or m:
@@ -441,6 +469,10 @@ def main():
         # 推送只要总览：不列省份明细。
         # 明细请在网站「变化历史」查看（那里是完整分省数据，同源同口径）。
 
+    if incomplete:
+        print("::warning::日报暂缓：" + "、".join(incomplete))
+        raise SystemExit(1)
+
     lines.append("")
     lines.append("**合计**：新增 %d、下架 %d、修改 %d" % tuple(grand))
     if not any_change:
@@ -462,7 +494,7 @@ def main():
     force = bool(os.getenv("FORCE_PUSH"))
     skip = (not any_change) and (yesterday or ev == "schedule") and not force
     if skip:
-        print("\n⏭ 本轮四家均无变化（定时触发）→ 跳过推送，不再重发旧内容。")
+        print("\n⏭ 所选地区和运营商在日报窗口内无变化，跳过推送。")
         print("   如需强制推送，设置 FORCE_PUSH=1（或在网页手动 Run workflow）。")
         return
 

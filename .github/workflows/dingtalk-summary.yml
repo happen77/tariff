@@ -81,7 +81,7 @@ jobs:
       - id: w
         run: |
           python3 - <<'PYEOF'
-          import datetime, os, json, base64
+          import datetime, os, json, base64, urllib.error
           bj = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
           day = bj.strftime("%Y-%m-%d")
           slot = "daily" if bj.hour >= 9 else ""
@@ -104,10 +104,11 @@ jobs:
               if raw.get("content"):
                   marks = json.loads(base64.b64decode(raw["content"]).decode("utf-8"))
               print("[去重] API 读到标记: %s" % json.dumps(marks, ensure_ascii=False))
-          except Exception as ex:
-              # 读不到标记 = 去重失效，必须显眼报警，不能静默放行
-              print("[去重][警告] 读标记失败，本轮去重失效: %s" % str(ex)[:140])
-              marks = {}
+          except urllib.error.HTTPError as ex:
+              if ex.code != 404:
+                  raise
+          if not isinstance(marks, dict):
+              raise ValueError("invalid daily delivery marks")
           today = marks.get(day) if isinstance(marks, dict) else None
           today = today if isinstance(today, list) else []
           dup = (not manual) and slot != "" and (slot in today)
@@ -358,7 +359,7 @@ jobs:
           REPO:     ${{ github.repository }}
         run: |
           python3 - <<'PYEOF'
-          import datetime, os, json, base64, urllib.request
+          import datetime, os, json, base64, urllib.request, urllib.error
           slot = os.environ.get("SLOT", "")
           if not slot or slot == "窗口外":
               print("无有效场次，不写标记"); raise SystemExit(0)
@@ -374,9 +375,11 @@ jobs:
               old = raw.get("sha")
               if raw.get("content"):
                   m = json.loads(base64.b64decode(raw["content"]).decode("utf-8"))
-          except Exception:
-              m = {}
-          if not isinstance(m, dict): m = {}
+          except urllib.error.HTTPError as ex:
+              if ex.code != 404:
+                  raise
+          if not isinstance(m, dict):
+              raise ValueError("invalid daily delivery marks")
           cut = (bj - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
           for kk in list(m.keys()):
               if kk < cut: m.pop(kk, None)

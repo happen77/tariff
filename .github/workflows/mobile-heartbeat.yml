@@ -47,6 +47,7 @@ jobs:
       - name: 循环驱动抓取
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTIFY_MODE: ${{ vars.NOTIFY_MODE }}
         run: |
           set -e
           DEADLINE=$(( $(date -u +%s) + 100 * 60 ))
@@ -78,14 +79,15 @@ jobs:
           }
 
           api_post() {
-            local url="$1" i
+            local url="$1" payload='{"ref":"main"}' i
+            if [ "$#" -eq 2 ]; then payload="$2"; fi
             for i in 1 2 3; do
               if curl -fsS --max-time 30 -X POST \
                 -H "Authorization: Bearer ${GH_TOKEN}" \
                 -H "Accept: application/vnd.github+json" \
                 -H "User-Agent: mobile-heartbeat" \
                 -H "Content-Type: application/json" \
-                -d '{"ref":"main"}' "$url" >/dev/null 2>/tmp/api_err; then
+                -d "$payload" "$url" >/dev/null 2>/tmp/api_err; then
                 return 0
               fi
               echo "[warn] 派发失败（$i/3）：$(head -c 120 /tmp/api_err)" >&2
@@ -134,9 +136,34 @@ jobs:
             echo $(( $(date -u +%s) - UPDATED_TS ))
           }
 
+          retry_daily_notify() {
+            [ "$NOTIFY_MODE" != "focus_manual" ] || return 0
+            local day marks runs endpoint cutoff
+            day=$(TZ=Asia/Shanghai date +%F)
+            cutoff=$(TZ=Asia/Shanghai date -d "$day 10:00" +%s)
+            [ "$(date +%s)" -ge "$cutoff" ] || return 0
+            marks=$(api "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/data/.notify_marks.json") || return 0
+            if ! jq -e --arg day "$day" '
+              (.content | gsub("[[:space:]]"; "") | @base64d | fromjson)
+              | (.[$day] // []) | index("daily") == null
+            ' <<< "$marks" >/dev/null; then return 0; fi
+            endpoint="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/dingtalk-summary.yml"
+            runs=$(api "$endpoint/runs?per_page=20") || return 0
+            cutoff=$(date -u -d '45 minutes ago' +%FT%TZ)
+            if jq -e --arg cutoff "$cutoff" '
+              any(.workflow_runs[]; .created_at >= $cutoff)
+            ' <<< "$runs" >/dev/null; then return 0; fi
+            if api_post "$endpoint/dispatches" '{"ref":"main","inputs":{"action":"补跑昨日日报"}}'; then
+              echo "已触发钉钉日报补跑"
+            else
+              echo "::warning::日报补跑触发失败"
+            fi
+          }
+
           while :; do
             LEFT=$(( DEADLINE - $(date -u +%s) ))
             if [ "$LEFT" -le 0 ]; then break; fi
+            retry_daily_notify
             AGE=$(data_age)
             SLEEP=$(( INTERVAL - AGE ))
             if [ "$ATTEMPTED" = "1" ] && [ "$SLEEP" -lt "$MIN_GAP" ]; then SLEEP=$MIN_GAP; fi
