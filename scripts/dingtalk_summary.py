@@ -108,14 +108,14 @@ def sec_cn(k):
 
 
 
-def parse_ts(ts):
+def parse_ts(ts, source_tz=CST):
     """解析历史记录时间戳，返回 aware datetime 或 None"""
     if not ts:
         return None
     s = str(ts).strip()
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M"):
         try:
-            return datetime.strptime(s, fmt).replace(tzinfo=CST)
+            return datetime.strptime(s, fmt).replace(tzinfo=source_tz).astimezone(CST)
         except ValueError:
             continue
     return None
@@ -143,7 +143,8 @@ def pending_regions(history_path, regions, cutoff):
         try:
             with open(path, encoding="utf-8") as f:
                 snapshot = json.load(f)
-            checked = parse_ts(snapshot.get("timestamp") or snapshot.get("updated"))
+            # Province snapshots use the GitHub runner's clock (UTC).
+            checked = parse_ts(snapshot.get("timestamp") or snapshot.get("updated"), timezone.utc)
         except (OSError, ValueError, AttributeError):
             checked = None
         if checked is None or checked < cutoff:
@@ -151,7 +152,7 @@ def pending_regions(history_path, regions, cutoff):
     return pending
 
 
-def load_latest_time(path):
+def load_latest_time(path, source_tz=CST):
     """读该站 latest.json 的「最后检查时间」。
 
     history.json 只在有真实变化时才写入，latest.json 每轮抓取都会更新。
@@ -165,7 +166,7 @@ def load_latest_time(path):
         with open(fp, encoding="utf-8") as f:
             d = json.load(f)
         for k in ("updated_at", "updated", "ts", "generated_at"):
-            v = parse_ts(d.get(k))
+            v = parse_ts(d.get(k), source_tz)
             if v:
                 return v
     except Exception:
@@ -173,10 +174,10 @@ def load_latest_time(path):
     return None
 
 
-def last_change_time(hist):
+def last_change_time(hist, source_tz=CST):
     """history 里最后一次「真实变化」的时间（全 0 记录不算）。"""
     for e in reversed(hist or []):
-        dt = parse_ts(e.get("ts"))
+        dt = parse_ts(e.get("ts"), source_tz)
         if not dt:
             continue
         changed = False
@@ -207,7 +208,7 @@ def human_ago(dt, now):
     return "%d 天前" % int(secs // 86400)
 
 
-def summarize(hist, since, provs=None, until=None):
+def summarize(hist, since, provs=None, until=None, source_tz=CST):
     """汇总某站「最新一轮」的变化。
 
     注意：这里刻意不累加窗口内所有轮次。之前累加导致 24h 内每轮推送
@@ -222,17 +223,17 @@ def summarize(hist, since, provs=None, until=None):
     latest = None
     if until is not None:
         hist = [entry for entry in hist
-                if (dt := parse_ts(entry.get("ts"))) and since <= dt < until]
-        latest = max(hist, key=lambda entry: parse_ts(entry["ts"]), default=None)
+                if (dt := parse_ts(entry.get("ts"), source_tz)) and since <= dt < until]
+        latest = max(hist, key=lambda entry: parse_ts(entry["ts"], source_tz), default=None)
     else:
         for entry in hist:
-            timestamp = parse_ts(entry.get("ts"))
+            timestamp = parse_ts(entry.get("ts"), source_tz)
             if timestamp and timestamp < since:
                 continue
             latest = entry
         hist = [latest] if latest is not None else []
     for e in hist:
-        dt = parse_ts(e.get("ts"))
+        dt = parse_ts(e.get("ts"), source_tz)
         if dt and dt < since:
             continue
         for k, v in e.items():
@@ -437,15 +438,19 @@ def main():
         except (OSError, ValueError):
             incomplete.append(f"{name}（历史数据无法读取）")
             continue
-        a, r, m, secs, batches, latest_ts = summarize(hist, since, PUSH_PROVS or None, until=until)
+        # The mobile history builder writes Beijing time explicitly.
+        history_tz = CST if op == "mobile" else timezone.utc
+        a, r, m, secs, batches, latest_ts = summarize(
+            hist, since, PUSH_PROVS or None, until=until, source_tz=history_tz
+        )
         grand[0] += a; grand[1] += r; grand[2] += m
         if a or r or m:
             pushed_marks[op] = str(latest_ts or "")
         if not (a or r or m):
             # 说清「查过了但没变化」，而不是干巴巴一句「无变化」——
             # 否则用户看到网站时间戳在跳、钉钉却说无变化，会以为钉钉滞后。
-            checked = load_latest_time(path)
-            prev = last_change_time(hist)
+            checked = load_latest_time(path, timezone.utc)
+            prev = last_change_time(hist, history_tz)
             bits = []
             if checked:
                 bits.append("数据至 %s" % checked.strftime("%m-%d %H:%M"))
