@@ -1,10 +1,13 @@
 name: Unicom Fetch & Build
 # 中国联通资费抓取（全国 + 31 省），产物提交到 unicom/data
 #
-# 定时：不再单独看 cron。联通跟随主站（mobile-build.yml）的节拍，
-# 每轮移动抓取开始时由主站的 subsites 作业一并派发；这里保留
-# workflow_dispatch 供手动 / 心跳 / 看门狗调用。
+# 定时：主站（mobile-build.yml）每轮会派发一次；本站自带 2 小时 cron 兜底。
+# 以前只靠主站派发，主站轮次被平台延迟漂移到非整点后，本站数据「还不够旧」就被
+# 闸门跳过，联通连续 3 小时不更新。独立 cron + 数据年龄闸门（单轮 75 分钟，阈值取
+# 100 分钟）既保节拍，又不会两轮叠在并发组里互踩。
 on:
+  schedule:
+    - cron: "15 */2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -12,7 +15,8 @@ permissions:
 
 concurrency:
   group: unicom-build
-  cancel-in-progress: true
+  # 禁止 cancel-in-progress：本轮会写累积池缓存，被掐断会留下残缺池
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -24,9 +28,23 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: 新鲜度闸门（数据未过期不重复抓取）
+        id: gate
+        run: |
+          U=$(curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/unicom/data/latest.json" 2>/dev/null \
+              | python3 -c "import json,sys;print(json.load(sys.stdin).get('updated',''))" 2>/dev/null || true)
+          AGE=99999
+          if [ -n "$U" ]; then AGE=$(( $(date -u +%s) - $(date -u -d "$U" +%s) )) || AGE=99999; fi
+          echo "线上联通数据距今 $((AGE/60)) 分钟"
+          if [ "$AGE" -lt 6000 ]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            echo "数据仍新鲜（<100 分钟），本轮跳过"
+          fi
+
       # 累积池 _pool.json 约 68MB，是跨轮对比的基线：压缩后放 Actions 缓存，
       # 不再每轮入库。缓存不可用时只丢一轮变化检测，不影响数据更新。
       - name: 还原联通累积池
+        if: steps.gate.outputs.skip != '1'
         continue-on-error: true
         uses: actions/cache/restore@v4
         with:
@@ -36,6 +54,7 @@ jobs:
             unicom-poolgz-
 
       - name: 解压累积池
+        if: steps.gate.outputs.skip != '1'
         continue-on-error: true
         run: |
           if [ -f unicom/_pool.json.gz ]; then
@@ -47,6 +66,7 @@ jobs:
           fi
 
       - name: 抓取联通资费（全国 + 31 省）
+        if: steps.gate.outputs.skip != '1'
         run: |
           set -e
           set -o pipefail
@@ -56,6 +76,7 @@ jobs:
           python3 -c "import json;d=json.load(open('../unicom/data/latest.json',encoding='utf-8'));print('[联通] updated =',d.get('updated'),'| 板块 =',len(d.get('sections',[])))"
 
       - name: 体量闸门（防池残缺导致数据缩水）
+        if: steps.gate.outputs.skip != '1'
         run: |
           set -e
           OLDQ=$(git show HEAD:unicom/data/latest.json 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin).get('quanguo_total',0))" || echo 0)
@@ -69,7 +90,7 @@ jobs:
       - name: 保存联通累积池
         # 只在本轮成功时保存：此前是 always()，被取消的轮次也会把「抓到一半」的
         # 池写进缓存，下一轮 restore 到残缺池 → 误判首次基线，线上 3851 条被砍到 613 条。
-        if: success()
+        if: success() && steps.gate.outputs.skip != '1'
         continue-on-error: true
         run: |
           if [ -f unicom/data/_pool.json ]; then
@@ -77,7 +98,7 @@ jobs:
             echo "池已压缩 $(du -h unicom/_pool.json.gz | cut -f1)"
           fi
       - name: 写入缓存
-        if: success()
+        if: success() && steps.gate.outputs.skip != '1'
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
@@ -85,7 +106,7 @@ jobs:
           key: unicom-poolgz-${{ github.run_id }}
 
       - name: 提交
-        if: success()
+        if: success() && steps.gate.outputs.skip != '1'
         run: |
           set -e
           cd "$GITHUB_WORKSPACE"

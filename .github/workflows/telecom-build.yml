@@ -1,9 +1,14 @@
 name: Telecom Fetch & Build
 # 中国电信资费抓取（全国 + 31 省），产物提交到 telecom/data
 #
-# 定时：跟随主站（mobile-build.yml）的节拍，由主站 subsites 作业一并派发；
-# 这里保留 workflow_dispatch 供手动 / 心跳 / 看门狗调用。
+# 定时：主站（mobile-build.yml）每轮会派发一次；本站自带 2 小时 cron 兜底。
+# 原因：GitHub schedule 对本仓库延迟 0~9 小时不定，主站轮次会漂到 06:32 / 08:37
+# 这种非整点，主站 subsites 的「数据新鲜度」闸门于是整轮跳过本站，电信数据被拖到
+# 3 小时以上（2026-11-25 08:46 → 11:47 即此）。独立 cron + 先看数据年龄，既保住
+# 2 小时节拍，又不空跑。
 on:
+  schedule:
+    - cron: "5 */2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -11,7 +16,8 @@ permissions:
 
 concurrency:
   group: telecom-build
-  cancel-in-progress: true
+  # 禁止 cancel-in-progress：新轮直接取消旧轮会掐断正在跑的抓取，产物丢失
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -22,9 +28,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: 新鲜度闸门（数据未过期不重复抓取）
+        id: gate
+        run: |
+          U=$(curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/telecom/data/latest.json" 2>/dev/null \
+              | python3 -c "import json,sys;print(json.load(sys.stdin).get('updated',''))" 2>/dev/null || true)
+          AGE=99999
+          if [ -n "$U" ]; then AGE=$(( $(date -u +%s) - $(date -u -d "$U" +%s) )) || AGE=99999; fi
+          echo "线上电信数据距今 $((AGE/60)) 分钟"
+          if [ "$AGE" -lt 5400 ]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            echo "数据仍新鲜（<90 分钟），本轮跳过"
+          fi
+
       - run: pip install pycryptodome
+        if: steps.gate.outputs.skip != '1'
 
       - name: 抓取电信资费（全国 + 31 省）
+        if: steps.gate.outputs.skip != '1'
         run: |
           set -e
           set -o pipefail
@@ -34,7 +55,7 @@ jobs:
           python3 -c "import json;d=json.load(open('../telecom/data/latest.json',encoding='utf-8'));print('[电信] updated =',d.get('updated'),'| 板块 =',len(d.get('sections',[])))"
 
       - name: 提交
-        if: success()
+        if: success() && steps.gate.outputs.skip != '1'
         run: |
           set -e
           cd "$GITHUB_WORKSPACE"

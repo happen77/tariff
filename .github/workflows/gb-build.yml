@@ -1,9 +1,12 @@
 name: GB Fetch & Build
 # 中国广电资费抓取（全国 + 31 省 + 深圳），产物提交到 gb/data
 #
-# 定时：跟随主站（mobile-build.yml）的节拍，由主站 subsites 作业一并派发；
-# 这里保留 workflow_dispatch 供手动 / 心跳 / 看门狗调用。
+# 定时：主站（mobile-build.yml）每轮会派发一次；本站自带 2 小时 cron 兜底。
+# 原因同电信：主站轮次被平台延迟漂移后会落在子站「还不够旧」的时刻被闸门跳过，
+# 广电数据连续 3 小时不更新。独立 cron + 先看数据年龄，保节拍不空跑。
 on:
+  schedule:
+    - cron: "10 */2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -11,7 +14,8 @@ permissions:
 
 concurrency:
   group: gb-build
-  cancel-in-progress: true
+  # 同电信：禁止取消正在跑的轮次，避免抓到一半被掐断
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -23,7 +27,21 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: 新鲜度闸门（数据未过期不重复抓取）
+        id: gate
+        run: |
+          U=$(curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/gb/data/latest.json" 2>/dev/null \
+              | python3 -c "import json,sys;print(json.load(sys.stdin).get('updated',''))" 2>/dev/null || true)
+          AGE=99999
+          if [ -n "$U" ]; then AGE=$(( $(date -u +%s) - $(date -u -d "$U" +%s) )) || AGE=99999; fi
+          echo "线上广电数据距今 $((AGE/60)) 分钟"
+          if [ "$AGE" -lt 5400 ]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            echo "数据仍新鲜（<90 分钟），本轮跳过"
+          fi
+
       - name: 抓取广电资费（全国 + 31 省 + 深圳）
+        if: steps.gate.outputs.skip != '1'
         run: |
           set -e
           set -o pipefail
@@ -32,7 +50,7 @@ jobs:
           python3 -c "import json;d=json.load(open('../gb/data/latest.json',encoding='utf-8'));print('[广电] updated =',d.get('updated'),'| 板块 =',len(d.get('sections',[])))"
 
       - name: 提交
-        if: success()
+        if: success() && steps.gate.outputs.skip != '1'
         run: |
           set -e
           cd "$GITHUB_WORKSPACE"

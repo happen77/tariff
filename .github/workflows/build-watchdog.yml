@@ -121,7 +121,7 @@ jobs:
             gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/${wf}.yml/dispatches" \
               -f ref=main || echo "[${dir}] 触发失败"
           }
-          check telecom-build telecom 7800
-          check gb-build gb 7800
-          check unicom-build unicom 7800
+          check telecom-build telecom 6900
+          check gb-build gb 6900
+          check unicom-build unicom 6900
           echo "三家检查完成"
