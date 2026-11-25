@@ -38,6 +38,7 @@ on:
           - "仅推送"
           - "测试钉钉连接"
           - "补跑昨日日报"
+          - "发送昨日日报预览"
           - "全量推送"
         default: "手动推送(重点省)"
       focus_provs:
@@ -335,7 +336,8 @@ jobs:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
           DINGTALK_SECRET:  ${{ secrets.DINGTALK_SECRET }}
           DINGTALK_ONLY:    "1"
-          REPORT_YESTERDAY: ${{ github.event_name == 'workflow_dispatch' && inputs.action != '补跑昨日日报' && '0' || '1' }}
+          REPORT_YESTERDAY: ${{ github.event_name == 'workflow_dispatch' && inputs.action != '补跑昨日日报' && inputs.action != '发送昨日日报预览' && '0' || '1' }}
+          REPORT_PREVIEW:   ${{ github.event_name == 'workflow_dispatch' && inputs.action == '发送昨日日报预览' && '1' || '0' }}
           REPORT_DAY:       ${{ needs.window.outputs.report_day }}
           SINCE_HOURS:      ${{ github.event.inputs.hours || '24' }}
           PUSH_OPS:         ${{ vars.PUSH_OPS || 'mobile,unicom,telecom' }}

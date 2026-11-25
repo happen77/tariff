@@ -390,6 +390,7 @@ def main():
 
     now = datetime.now(CST)
     yesterday = os.getenv("REPORT_YESTERDAY") == "1"
+    preview = yesterday and os.getenv("REPORT_PREVIEW") == "1"
     until = now.replace(hour=0, minute=0, second=0, microsecond=0) if yesterday else None
     report_day = os.getenv("REPORT_DAY")
     if yesterday and report_day:
@@ -409,7 +410,8 @@ def main():
     pushed_marks = {}
     print("统计窗口: %s 之后 (CST)" % since.strftime("%Y-%m-%d %H:%M"))
 
-    lines = ["## 资费变化汇总", "",
+    heading = "资费变化日报预览" if preview else "资费变化汇总"
+    lines = ["## " + heading, "",
              "**统计范围**：%s ~ %s (北京时间)" %
              (since.strftime("%m-%d %H:%M"), (until or now).strftime("%m-%d %H:%M")), ""]
     # 过滤条件写进正文，避免「数字变小了」被误判成漏推
@@ -475,12 +477,15 @@ def main():
         # 明细请在网站「变化历史」查看（那里是完整分省数据，同源同口径）。
 
     if incomplete:
-        print("::warning::日报暂缓：" + "、".join(incomplete))
-        raise SystemExit(1)
+        if not preview:
+            print("::warning::日报暂缓：" + "、".join(incomplete))
+            raise SystemExit(1)
+        lines.extend(["", "**待核实**：" + "、".join(incomplete)])
+        lines.append("合计仅包含数据已核实的运营商。")
 
     lines.append("")
     lines.append("**合计**：新增 %d、下架 %d、修改 %d" % tuple(grand))
-    if not any_change:
+    if not any_change and not incomplete:
         lines.append("")
         lines.append("> 统计窗口内没有匹配的资费变更记录。")
 
@@ -496,7 +501,7 @@ def main():
     # （曾导致每天两次都收到昨晚同一条内容，误以为推送延迟了 12 小时。）
     # 手动触发（workflow_dispatch）仍然照常推 —— 那是站长主动要看，不是自动播报。
     ev = os.getenv("GITHUB_EVENT_NAME", "").strip()
-    force = bool(os.getenv("FORCE_PUSH"))
+    force = preview or bool(os.getenv("FORCE_PUSH"))
     skip = (not any_change) and (yesterday or ev == "schedule") and not force
     if skip:
         print("\n⏭ 所选地区和运营商在日报窗口内无变化，跳过推送。")
@@ -518,7 +523,7 @@ def main():
     ok_any = (not res) or any(ok for _n, ok, _d in res)
     if os.getenv("DINGTALK_ONLY") == "1" and not ok_any:
         raise SystemExit(1)
-    if any_change and ok_any:
+    if any_change and ok_any and not preview:
         marks["__summary_mark"] = mark
         marks["__summary_mark_at"] = now.strftime("%Y-%m-%d %H:%M:%S")
         try:
