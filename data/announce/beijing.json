@@ -1,7 +1,18 @@
 {
- "updated": "2026-11-23 17:35",
- "count": 1146,
+ "updated": "2026-11-25 22:08",
+ "count": 1147,
  "items": [
+  {
+   "id": "56272",
+   "title": "网络调整公告",
+   "date": "2026-11-25",
+   "page_url": "https://www.10086.cn/aboutus/news/pannounce/bj/index_100_100_detail_56272.html",
+   "status": "on",
+   "first_seen": "2026-11-25 22:08",
+   "summary": "尊敬的客户： 您好！ 为进一步提升网络质量，为广大客户提供优质通信服务，我司将对部分通信设备开展倒换应急演练。依据《中华人民共和国电信条例》相关规定，现将演练提前公告如下：演练时间2026 年 11 月 28日 0 时至 5 时，演练期间可",
+   "content": "<p>尊敬的客户：<br>\n &nbsp; &nbsp; &nbsp; 您好！<br>\n &nbsp; &nbsp; &nbsp; 为进一步提升网络质量，为广大客户提供优质通信服务，我司将对部分通信设备开展倒换应急演练。依据《中华人民共和国电信条例》相关规定，现将演练提前公告如下：演练时间2026 年 11 月 28日 0 时至 5 时，演练期间可能会导致业务影响。本次演练给您带来不便，我们深表歉意，客服服务热线：10086。<br>\n &nbsp; &nbsp; &nbsp; 特此公告！<br>\n<p style=\"text-align:right\">中国移动通信集团北京有限公司</p>\n<p style=\"text-align:right\">2026 年 11 月 25日</p>\n </p>\n\n<div></div>",
+   "attachments": []
+  },
   {
    "id": "56254",
    "title": "关于 CRM 系统 BOSS 系统升级的公告",
@@ -9217,6 +9228,6 @@
  ],
  "section": "beijing",
  "name": "北京",
- "active": 1146,
+ "active": 1147,
  "removed": 0
 }

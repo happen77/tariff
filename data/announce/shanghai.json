@@ -1,7 +1,18 @@
 {
- "updated": "2026-11-25 07:55",
- "count": 199,
+ "updated": "2026-11-25 22:08",
+ "count": 200,
  "items": [
+  {
+   "id": "56271",
+   "title": "业务系统升级公告",
+   "date": "2026-11-25",
+   "page_url": "https://www.10086.cn/aboutus/news/pannounce/sh/index_210_210_detail_56271.html",
+   "status": "on",
+   "first_seen": "2026-11-25 22:08",
+   "summary": "尊敬的客户： 您好，为进一步提升客户服务质量，我公司计划于2026年11月25日23:00至11月26日7:00对业务系统进行升级，届时我公司所有服务渠道将暂停业务查询、办理、充值及各类提醒等服务，但不影响正常通信。由此给您带来的不便，我们",
+   "content": "<p>尊敬的客户：</p>\n<p>&nbsp; &nbsp; &nbsp;&nbsp;您好，为进一步提升客户服务质量，我公司计划于<a date=\"1795568400000\" style=\"color:inherit\">2026年11月25日</a>23:00至11月26日7:00对业务系统进行升级，届时我公司所有服务渠道将暂停业务查询、办理、充值及各类提醒等服务，但不影响正常通信。由此给您带来的不便，我们深表歉意，敬请谅解。</p>\n<p>&nbsp; &nbsp; &nbsp; 特此通知。</p>\n<p><br>\n</p>\n<p><br>\n</p>\n<p><br>\n</p>\n<p><br>\n</p>\n<p style=\"text-align:right\">中国移动通信集团上海有限公司</p>\n<p style=\"text-align:right\"><a date=\"1750208400000\" style=\"color:inherit\">&nbsp;</a><a date=\"1774227600000\" style=\"color:inherit\">2026年11月25日</a></p>",
+   "attachments": []
+  },
   {
    "id": "56270",
    "title": "关于2027年度中国移动通信集团上海有限公司金山分公司公开寻源租赁营业厅用房公示（上半年）",
@@ -1669,6 +1680,6 @@
  ],
  "section": "shanghai",
  "name": "上海",
- "active": 199,
+ "active": 200,
  "removed": 0
 }
