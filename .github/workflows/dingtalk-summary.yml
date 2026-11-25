@@ -25,8 +25,9 @@ on:
   repository_dispatch:
     types: [notify]
   schedule:
-    # 09:00 Beijing time (01:00 UTC).
-    - cron: "0 1 * * *"
+    # 北京时间 09:07 起错峰执行，后续时段补跑，按日报日期去重。
+    - cron: "7 1 * * *"
+    - cron: "37 2,4,8,12 * * *"
   workflow_dispatch:
     inputs:
       action:
@@ -36,6 +37,7 @@ on:
           - "手动推送(重点省)"
           - "仅推送"
           - "测试钉钉连接"
+          - "补跑昨日日报"
           - "全量推送"
         default: "手动推送(重点省)"
       focus_provs:
@@ -61,12 +63,14 @@ jobs:
       ok:   ${{ steps.w.outputs.ok }}
       slot: ${{ steps.w.outputs.slot }}
       bj:   ${{ steps.w.outputs.bj }}
+      report_day: ${{ steps.w.outputs.report_day }}
     env:
       # 根因（2026-10-17 去重失效）：Actions 默认**没有** GITHUB_TOKEN 环境
       # 变量，只有 secrets.GITHUB_TOKEN。上面读标记若不注入，Authorization
       # 就成了 "Bearer "（空）→ API 401 → 读不到标记 → 永远判定「没推过」
       # → 同一场次连推两条。notify job 侧注入了 GH_TOKEN 所以写得进，
       # 读写不对称导致去重形同虚设。
+      NOTIFY_ACTION: ${{ inputs.action }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       # 需要读场次标记（防同场次重复推），故必须先 checkout
@@ -82,7 +86,7 @@ jobs:
           day = bj.strftime("%Y-%m-%d")
           slot = "daily" if bj.hour >= 9 else ""
           ev = os.environ.get("GITHUB_EVENT_NAME", "")
-          manual = (ev == "workflow_dispatch")
+          manual = ev == "workflow_dispatch" and os.environ.get("NOTIFY_ACTION") != "补跑昨日日报"
           # 场次去重：cron 设了多个覆盖点（应对延迟漂移），没有这个去重，
           # 多个点会各推一条 —— 又变回「一天乱推好几次」。
           # 用 API 读，而不是读 checkout 下来的文件：
@@ -114,6 +118,7 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write("ok=%s\n" % ("true" if ok else "false"))
               f.write("slot=%s\n" % (slot or "窗口外"))
+              f.write("report_day=%s\n" % day)
               f.write("bj=%s\n" % bj.strftime("%m-%d %H:%M"))
           print("[窗口守卫] 北京 %s | 事件 %s | 场次 %s | 今日已推 %s | dup=%s | -> %s"
                 % (bj.strftime("%m-%d %H:%M"), ev, slot or "无", today, dup, reason))
@@ -329,7 +334,8 @@ jobs:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
           DINGTALK_SECRET:  ${{ secrets.DINGTALK_SECRET }}
           DINGTALK_ONLY:    "1"
-          REPORT_YESTERDAY: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
+          REPORT_YESTERDAY: ${{ github.event_name == 'workflow_dispatch' && inputs.action != '补跑昨日日报' && '0' || '1' }}
+          REPORT_DAY:       ${{ needs.window.outputs.report_day }}
           SINCE_HOURS:      ${{ github.event.inputs.hours || '24' }}
           PUSH_OPS:         ${{ vars.PUSH_OPS || 'mobile,unicom,telecom' }}
           PUSH_PROVS:       ${{ vars.PUSH_PROVS || 'heilongjiang' }}
@@ -344,9 +350,10 @@ jobs:
           fi
 
       - name: 记录本场次已推送（防同场次重复推）
-        if: success() && github.event_name != 'workflow_dispatch' && needs.window.outputs.ok == 'true'
+        if: success() && (github.event_name != 'workflow_dispatch' || inputs.action == '补跑昨日日报') && needs.window.outputs.ok == 'true'
         env:
           SLOT:     ${{ needs.window.outputs.slot }}
+          REPORT_DAY: ${{ needs.window.outputs.report_day }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO:     ${{ github.repository }}
         run: |
@@ -355,8 +362,8 @@ jobs:
           slot = os.environ.get("SLOT", "")
           if not slot or slot == "窗口外":
               print("无有效场次，不写标记"); raise SystemExit(0)
-          bj = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
-          day = bj.strftime("%Y-%m-%d")
+          day = os.environ["REPORT_DAY"]
+          bj = datetime.date.fromisoformat(day)
           repo, tok = os.environ["REPO"], os.environ["GH_TOKEN"]
           url = "https://api.github.com/repos/%s/contents/data/.notify_marks.json" % repo
           H = {"Authorization": "Bearer " + tok, "User-Agent": "notify-guard",

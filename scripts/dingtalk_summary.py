@@ -372,6 +372,9 @@ def main():
     now = datetime.now(CST)
     yesterday = os.getenv("REPORT_YESTERDAY") == "1"
     until = now.replace(hour=0, minute=0, second=0, microsecond=0) if yesterday else None
+    report_day = os.getenv("REPORT_DAY")
+    if yesterday and report_day:
+        until = datetime.fromisoformat(report_day).replace(tzinfo=CST)
     since = until - timedelta(days=1) if yesterday else now - timedelta(hours=SINCE_HOURS)
     # 已推送标记：定时任务每两小时跑一次，而 history 只在真有变化时新增记录。
     # 不记录“这条已推过”，同一轮变化会被后续每个时段重复播报（用户曾收到
@@ -457,7 +460,7 @@ def main():
     # 手动触发（workflow_dispatch）仍然照常推 —— 那是站长主动要看，不是自动播报。
     ev = os.getenv("GITHUB_EVENT_NAME", "").strip()
     force = bool(os.getenv("FORCE_PUSH"))
-    skip = (not any_change) and ev == "schedule" and not force
+    skip = (not any_change) and (yesterday or ev == "schedule") and not force
     if skip:
         print("\n⏭ 本轮四家均无变化（定时触发）→ 跳过推送，不再重发旧内容。")
         print("   如需强制推送，设置 FORCE_PUSH=1（或在网页手动 Run workflow）。")
@@ -465,7 +468,7 @@ def main():
 
     # 同一批变化只推一次：变化指纹 = {运营商: 该站最新变化记录的 ts}
     mark = json.dumps(sorted(pushed_marks.items()), ensure_ascii=False)
-    if (any_change and ev == "schedule" and not force
+    if (any_change and (yesterday or ev == "schedule") and not force
             and marks.get("__summary_mark") == mark):
         print("\n⏭ 本轮变化与上次已推送的完全相同（%s）→ 跳过重复播报。"
               % (marks.get("__summary_mark_at") or "上次"))
