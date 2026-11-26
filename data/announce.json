@@ -1,7 +1,17 @@
 {
- "updated": "2026-11-26 16:16",
+ "updated": "2026-11-26 18:31",
  "count": 176,
  "items": [
+  {
+   "id": "56289",
+   "prov": "hainan",
+   "prov_name": "海南",
+   "title": "移动业务下线公告",
+   "date": "2026-11-26",
+   "summary": "尊敬的海南移动客户您好： 由于产品运营合作调整，部分业务将于2026年12月31日起停止服务并终止计费。 涉及的业务清单详见附表。 如有不便，敬请谅解。感谢您的",
+   "page_url": "https://www.10086.cn/aboutus/news/pannounce/hi/index_898_898_detail_56289.html",
+   "status": "on"
+  },
   {
    "id": "56286",
    "prov": "shandong",
@@ -790,16 +800,6 @@
    "date": "2026-11-04",
    "summary": "尊敬的客户： 您好！为了提供更优质的服务，我公司将于2026年11月6日00:00-05:00进行系统升级，届时全省4/5G部分用户的上网业务将受影响，影响时长",
    "page_url": "https://www.10086.cn/aboutus/news/pannounce/hi/index_898_898_detail_56132.html",
-   "status": "on"
-  },
-  {
-   "id": "56131",
-   "prov": "hainan",
-   "prov_name": "海南",
-   "title": "关于我司将于2026年11月6日00：00-07：00进行系统升级的公告",
-   "date": "2026-11-04",
-   "summary": "尊敬的客户： 您好！为给客户提供更优质的服务，我公司将于2026年11月6日00：00-07：00进行系统升级，升级期间，全省营业系统、10086系统业务办理将",
-   "page_url": "https://www.10086.cn/aboutus/news/pannounce/hi/index_898_898_detail_56131.html",
    "status": "on"
   },
   {
@@ -1927,10 +1927,10 @@
   {
    "section": "hainan",
    "name": "海南",
-   "count": 637,
-   "active": 637,
+   "count": 638,
+   "active": 638,
    "removed": 0,
-   "updated": "2026-11-24 17:06"
+   "updated": "2026-11-26 18:31"
   },
   {
    "section": "chongqing",
