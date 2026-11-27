@@ -1,7 +1,17 @@
 {
- "updated": "2026-11-27 15:19",
+ "updated": "2026-11-27 16:23",
  "count": 176,
  "items": [
+  {
+   "id": "56297",
+   "prov": "hunan",
+   "prov_name": "湖南",
+   "title": "关于湖南移动“三湘好物”选品招募公告",
+   "date": "2026-11-27",
+   "summary": "为落实集团公司移动爱购商城“九州好物”主题营销，丰富移动爱购商城AI豆兑换实物商品供给，满足客户对高品质生活的诉求，现面向社会公开招募湖南产地优质特色商品，相关",
+   "page_url": "https://www.10086.cn/aboutus/news/pannounce/hn/index_731_731_detail_56297.html",
+   "status": "on"
+  },
   {
    "id": "56296",
    "prov": "neimenggu",
@@ -460,16 +470,6 @@
    "date": "2026-11-20",
    "summary": "尊敬的客户： 当前正值汛期，为响应湖南省防汛备汛工作部署，进一步提升全省应急场景应急通信保障能力，全力保障省内防灾减灾、应急救援工作有序开展。针对全省应急工作人",
    "page_url": "https://www.10086.cn/aboutus/news/pannounce/hn/index_731_731_detail_56241.html",
-   "status": "on"
-  },
-  {
-   "id": "56240",
-   "prov": "hunan",
-   "prov_name": "湖南",
-   "title": "关于购机享优惠活动业务调整的公告",
-   "date": "2026-11-20",
-   "summary": "尊敬的湖南移动用户： 为积极响应工信部关于“明白办，放心用”的相关要求，湖南移动将于2026年11月20日0点起对以下产品部分活动规则进行细微调整，具体请见活动",
-   "page_url": "https://www.10086.cn/aboutus/news/pannounce/hn/index_731_731_detail_56240.html",
    "status": "on"
   },
   {
@@ -1903,10 +1903,10 @@
   {
    "section": "hunan",
    "name": "湖南",
-   "count": 69,
-   "active": 69,
+   "count": 70,
+   "active": 70,
    "removed": 0,
-   "updated": "2026-11-27 13:10"
+   "updated": "2026-11-27 16:23"
   },
   {
    "section": "guangdong",
