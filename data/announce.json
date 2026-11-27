@@ -1,7 +1,27 @@
 {
- "updated": "2026-11-27 13:10",
+ "updated": "2026-11-27 15:19",
  "count": 176,
  "items": [
+  {
+   "id": "56296",
+   "prov": "neimenggu",
+   "prov_name": "内蒙古",
+   "title": "关于部分停售业务的公告",
+   "date": "2026-11-27",
+   "summary": "尊敬的移动用户： 感谢您长期以来对我们的支持，因业务发展调整，现将部分停售业务进行公告。停售业务不再产生订购关系，不再产生相关费用。具体清单详见附件。 给您带来",
+   "page_url": "https://www.10086.cn/aboutus/news/pannounce/nm/index_471_471_detail_56296.html",
+   "status": "on"
+  },
+  {
+   "id": "56295",
+   "prov": "guangxi",
+   "prov_name": "广西",
+   "title": "中国移动广西公司2027年度互联网分销合作伙伴招募公告",
+   "date": "2026-11-27",
+   "summary": "为持续拓展线上业务生态，繁荣数字化销售渠道，中国移动广西公司现面向全社会公开招募2027年度互联网分销合作伙伴。我们期待与具备成熟流量阵地和稳定运营能力的伙伴携",
+   "page_url": "https://www.10086.cn/aboutus/news/pannounce/gx/index_771_771_detail_56295.html",
+   "status": "on"
+  },
   {
    "id": "56293",
    "prov": "hunan",
@@ -290,16 +310,6 @@
    "date": "2026-11-24",
    "summary": "尊敬的客户： 您好！为给客户提供更优质的服务，我公司将于2026年11月26日00：00-07：00进行系统升级，升级期间，全省营业系统、10086系统业务办理",
    "page_url": "https://www.10086.cn/aboutus/news/pannounce/hi/index_898_898_detail_56260.html",
-   "status": "on"
-  },
-  {
-   "id": "56259",
-   "prov": "neimenggu",
-   "prov_name": "内蒙古",
-   "title": "锡林郭勒分公司2026年引商入柜（第二期）项目结果公示",
-   "date": "2026-11-24",
-   "summary": "锡林郭勒分公司2026年引商入柜（第二期）项目于2026年11月3日15：00开始竞争性谈判，现将中选候选人公示如下： 标段1自营锡市察哈尔营业厅（一楼）成交人",
-   "page_url": "https://www.10086.cn/aboutus/news/pannounce/nm/index_471_471_detail_56259.html",
    "status": "on"
   },
   {
@@ -630,16 +640,6 @@
    "date": "2026-11-18",
    "summary": "尊敬的客户： 您好！为了提供更优质的服务，我公司将于2026年11月20日、12月9日00:00-05:00进行系统升级，届时全省4/5G TOC及物联网部分用",
    "page_url": "https://www.10086.cn/aboutus/news/pannounce/hi/index_898_898_detail_56223.html",
-   "status": "on"
-  },
-  {
-   "id": "56221",
-   "prov": "guangxi",
-   "prov_name": "广西",
-   "title": "关于中国移动广西公司2026年集团类客户DICT联盟合作伙伴 （第十九批）入围结果的公示",
-   "date": "2026-11-18",
-   "summary": "根据2025年12月31日在中国移动官方网站（http://www.10086.cn）发布《中国移动广西公司2026年集团类客户DICT联盟合作伙伴招募邀请函》",
-   "page_url": "https://www.10086.cn/aboutus/news/pannounce/gx/index_771_771_detail_56221.html",
    "status": "on"
   },
   {
@@ -1799,10 +1799,10 @@
   {
    "section": "neimenggu",
    "name": "内蒙古",
-   "count": 87,
-   "active": 87,
+   "count": 88,
+   "active": 88,
    "removed": 0,
-   "updated": "2026-11-27 11:05"
+   "updated": "2026-11-27 15:19"
   },
   {
    "section": "liaoning",
@@ -1919,10 +1919,10 @@
   {
    "section": "guangxi",
    "name": "广西",
-   "count": 1386,
-   "active": 1386,
+   "count": 1387,
+   "active": 1387,
    "removed": 0,
-   "updated": "2026-11-25 22:08"
+   "updated": "2026-11-27 15:19"
   },
   {
    "section": "hainan",
