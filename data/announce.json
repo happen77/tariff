@@ -1,7 +1,17 @@
 {
- "updated": "2026-11-27 16:23",
+ "updated": "2026-11-27 17:31",
  "count": 176,
  "items": [
+  {
+   "id": "56298",
+   "prov": "tianjin",
+   "prov_name": "天津",
+   "title": "关于咪咕视频部分资费下线的公告",
+   "date": "2026-11-27",
+   "summary": "尊敬的客户： 您好！ 感谢您对咪咕视频业务的支持与使用。因业务发展调整，自2026年11月30日24时起，咪咕视频以下业务产品（具体清单附后）将下线停服，已订购",
+   "page_url": "https://www.10086.cn/aboutus/news/pannounce/tj/index_220_220_detail_56298.html",
+   "status": "on"
+  },
   {
    "id": "56297",
    "prov": "hunan",
@@ -963,16 +973,6 @@
    "status": "on"
   },
   {
-   "id": "55970",
-   "prov": "tianjin",
-   "prov_name": "天津",
-   "title": "关于手机报122个产品下线的公告",
-   "date": "2026-10-13",
-   "summary": "尊敬的客户： 您好！ 感谢您对手机报业务的支持与使用。因业务调整，山西日报手机报等122项手机报产品拟于2026年11月15日停止服务并下线。下线后将停止内容更",
-   "page_url": "https://www.10086.cn/aboutus/news/pannounce/tj/index_220_220_detail_55970.html",
-   "status": "on"
-  },
-  {
    "id": "55962",
    "prov": "hebei",
    "prov_name": "河北",
@@ -1775,10 +1775,10 @@
   {
    "section": "tianjin",
    "name": "天津",
-   "count": 46,
-   "active": 46,
+   "count": 47,
+   "active": 47,
    "removed": 0,
-   "updated": "2026-11-24 17:06"
+   "updated": "2026-11-27 17:31"
   },
   {
    "section": "hebei",
