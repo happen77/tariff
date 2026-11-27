@@ -276,7 +276,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # UI 保护：自动化只提交数据产物，界面文件被改动则先还原
           python3 scripts/guard_ui.py || true
-          git add -A data pipelines/mobile/snapshots
+          git add -A data pipelines/mobile/snapshots ':(exclude)data/.notify_marks.json'
           BAD="$(git diff --cached --name-only | grep -vE '^(data/|pipelines/mobile/snapshots/)' || true)"
           if [ -n "$BAD" ]; then echo "::error::检测到非数据文件被暂存，已中止"; echo "$BAD"; exit 1; fi
           if git diff --cached --quiet; then
@@ -293,7 +293,7 @@ jobs:
                 [ -d "/tmp/art/$d" ] && { rm -rf "$d"; cp -a "/tmp/art/$d" "./$d"; }
               done
               python3 scripts/guard_ui.py || true
-              git add -A data pipelines/mobile/snapshots
+              git add -A data pipelines/mobile/snapshots ':(exclude)data/.notify_marks.json'
               BAD="$(git diff --cached --name-only | grep -vE '^(data/|pipelines/mobile/snapshots/)' || true)"
               if [ -n "$BAD" ]; then echo "::error::检测到非数据文件被暂存，已中止"; echo "$BAD"; exit 1; fi
               git commit -q -m "notify fetch+push retry$i $(date -u +%FT%TZ)" || true
@@ -332,12 +332,14 @@ jobs:
           python-version: '3.11'
 
       - name: 推送钉钉日报
+        id: delivery
         env:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
           DINGTALK_SECRET:  ${{ secrets.DINGTALK_SECRET }}
           DINGTALK_ONLY:    "1"
           REPORT_YESTERDAY: ${{ github.event_name == 'workflow_dispatch' && inputs.action != '补跑昨日日报' && inputs.action != '发送昨日日报预览' && '0' || '1' }}
           REPORT_PREVIEW:   ${{ github.event_name == 'workflow_dispatch' && inputs.action == '发送昨日日报预览' && '1' || '0' }}
+          TRACK_DAILY_DELIVERY: ${{ (github.event_name != 'workflow_dispatch' || inputs.action == '补跑昨日日报') && '1' || '0' }}
           REPORT_DAY:       ${{ needs.window.outputs.report_day }}
           SINCE_HOURS:      ${{ github.event.inputs.hours || '24' }}
           PUSH_OPS:         ${{ vars.PUSH_OPS || 'mobile,unicom,telecom' }}
@@ -352,11 +354,13 @@ jobs:
             python3 scripts/dingtalk_summary.py
           fi
 
-      - name: 记录本场次已推送（防同场次重复推）
-        if: success() && (github.event_name != 'workflow_dispatch' || inputs.action == '补跑昨日日报') && needs.window.outputs.ok == 'true'
+      - name: 记录各运营商处理状态
+        if: success() && (steps.delivery.outputs.ready_ops != '' || steps.delivery.outputs.daily_complete == 'true')
         env:
           SLOT:     ${{ needs.window.outputs.slot }}
           REPORT_DAY: ${{ needs.window.outputs.report_day }}
+          READY_OPS: ${{ steps.delivery.outputs.ready_ops }}
+          DAILY_COMPLETE: ${{ steps.delivery.outputs.daily_complete }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO:     ${{ github.repository }}
         run: |
@@ -386,7 +390,12 @@ jobs:
           for kk in list(m.keys()):
               if kk < cut: m.pop(kk, None)
           cur = m.get(day) if isinstance(m.get(day), list) else []
-          if slot not in cur: cur.append(slot)
+          for op in filter(None, os.environ["READY_OPS"].split(",")):
+              key = "%s:%s" % (slot, op)
+              if key not in cur:
+                  cur.append(key)
+          if os.environ["DAILY_COMPLETE"] == "true" and slot not in cur:
+              cur.append(slot)
           m[day] = cur
           body = {"message": "notify mark %s %s" % (day, slot),
                   "content": base64.b64encode(json.dumps(m, ensure_ascii=False, indent=2)

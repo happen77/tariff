@@ -391,6 +391,7 @@ def main():
     now = datetime.now(CST)
     yesterday = os.getenv("REPORT_YESTERDAY") == "1"
     preview = yesterday and os.getenv("REPORT_PREVIEW") == "1"
+    daily = yesterday and os.getenv("TRACK_DAILY_DELIVERY") == "1" and not preview
     until = now.replace(hour=0, minute=0, second=0, microsecond=0) if yesterday else None
     report_day = os.getenv("REPORT_DAY")
     if yesterday and report_day:
@@ -405,8 +406,25 @@ def main():
         try:
             with open(marks_path, encoding="utf-8") as f:
                 marks = json.load(f) or {}
-        except Exception:
+        except (OSError, ValueError):
+            if daily:
+                raise
             marks = {}
+    if daily and not isinstance(marks, dict):
+        raise ValueError("invalid daily delivery marks")
+    daily_marks = marks.get(report_day, []) if daily else []
+    if not isinstance(daily_marks, list):
+        raise ValueError("invalid daily delivery marks for report day")
+    expected_ops = {op for _, _, _, op in SITES if op in selected_ops}
+    completed_ops = {op for op in expected_ops if f"daily:{op}" in daily_marks}
+    ready_ops = set()
+
+    def record_daily_delivery():
+        if daily:
+            completed = completed_ops | ready_ops
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+                f.write(f"ready_ops={','.join(sorted(ready_ops))}\n")
+                f.write(f"daily_complete={'true' if completed == expected_ops else 'false'}\n")
     pushed_marks = {}
     print("统计窗口: %s 之后 (CST)" % since.strftime("%Y-%m-%d %H:%M"))
 
@@ -416,7 +434,7 @@ def main():
              (since.strftime("%m-%d %H:%M"), (until or now).strftime("%m-%d %H:%M")), ""]
     # 过滤条件写进正文，避免「数字变小了」被误判成漏推
     _scope = []
-    if PUSH_OPS:
+    if PUSH_OPS and not daily:
         _scope.append("运营商：" + operator_names)
     if PUSH_PROVS:
         _scope.append("省份：" + "、".join(sec_cn(x) for x in PUSH_PROVS))
@@ -428,7 +446,7 @@ def main():
     incomplete = []
 
     for path, name, icon, op in SITES:
-        if op not in selected_ops:
+        if op not in selected_ops or op in completed_ops:
             continue          # 运营商没勾选，整个跳过，连「无变化」都不提
         if yesterday and PUSH_PROVS:
             pending = pending_regions(path, PUSH_PROVS, until)
@@ -445,6 +463,7 @@ def main():
         a, r, m, secs, batches, latest_ts = summarize(
             hist, since, PUSH_PROVS or None, until=until, source_tz=history_tz
         )
+        ready_ops.add(op)
         grand[0] += a; grand[1] += r; grand[2] += m
         if a or r or m:
             pushed_marks[op] = str(latest_ts or "")
@@ -477,11 +496,14 @@ def main():
         # 明细请在网站「变化历史」查看（那里是完整分省数据，同源同口径）。
 
     if incomplete:
-        if not preview:
+        if daily:
+            print("::warning::部分运营商日报待补跑：" + "、".join(incomplete))
+        elif not preview:
             print("::warning::日报暂缓：" + "、".join(incomplete))
             raise SystemExit(1)
-        lines.extend(["", "**待核实**：" + "、".join(incomplete)])
-        lines.append("合计仅包含数据已核实的运营商。")
+        else:
+            lines.extend(["", "**待核实**：" + "、".join(incomplete)])
+            lines.append("合计仅包含数据已核实的运营商。")
 
     lines.append("")
     lines.append("**合计**：新增 %d、下架 %d、修改 %d" % tuple(grand))
@@ -501,16 +523,20 @@ def main():
     # （曾导致每天两次都收到昨晚同一条内容，误以为推送延迟了 12 小时。）
     # 手动触发（workflow_dispatch）仍然照常推 —— 那是站长主动要看，不是自动播报。
     ev = os.getenv("GITHUB_EVENT_NAME", "").strip()
-    force = preview or bool(os.getenv("FORCE_PUSH"))
-    skip = (not any_change) and (yesterday or ev == "schedule") and not force
+    force = not daily and (preview or bool(os.getenv("FORCE_PUSH")))
+    skip = not any_change and (yesterday or ev == "schedule") and not force
     if skip:
-        print("\n⏭ 所选地区和运营商在日报窗口内无变化，跳过推送。")
-        print("   如需强制推送，设置 FORCE_PUSH=1（或在网页手动 Run workflow）。")
+        record_daily_delivery()
+        if daily:
+            print("本轮无符合条件的变化，跳过推送。")
+        else:
+            print("\n⏭ 所选地区和运营商在日报窗口内无变化，跳过推送。")
+            print("   如需强制推送，设置 FORCE_PUSH=1（或在网页手动 Run workflow）。")
         return
 
     # 同一批变化只推一次：变化指纹 = {运营商: 该站最新变化记录的 ts}
     mark = json.dumps(sorted(pushed_marks.items()), ensure_ascii=False)
-    if (any_change and (yesterday or ev == "schedule") and not force
+    if (not daily and any_change and (yesterday or ev == "schedule") and not force
             and marks.get("__summary_mark") == mark):
         print("\n⏭ 本轮变化与上次已推送的完全相同（%s）→ 跳过重复播报。"
               % (marks.get("__summary_mark_at") or "上次"))
@@ -523,6 +549,11 @@ def main():
     ok_any = (not res) or any(ok for _n, ok, _d in res)
     if os.getenv("DINGTALK_ONLY") == "1" and not ok_any:
         raise SystemExit(1)
+    if daily:
+        if not ok_any:
+            raise SystemExit(1)
+        record_daily_delivery()
+        return
     if any_change and ok_any and not preview:
         marks["__summary_mark"] = mark
         marks["__summary_mark_at"] = now.strftime("%Y-%m-%d %H:%M:%S")
